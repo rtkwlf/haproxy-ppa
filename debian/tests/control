@@ -1,0 +1,3 @@
+Tests: cli
+Depends: haproxy, socat
+Restrictions: needs-root

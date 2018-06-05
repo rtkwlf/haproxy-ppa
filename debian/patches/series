@@ -1,0 +1,10 @@
+0002-Use-dpkg-buildflags-to-build-halog.patch
+haproxy.service-start-after-syslog.patch
+haproxy.service-add-documentation.patch
+haproxy.service-use-environment-variables.patch
+
+# applied during the build process:
+# debianize-dconv.patch
+
+# Upstream, not released yet:
+0001-BUG-MEDIUM-cache-don-t-cache-when-an-Authorization-h.patch

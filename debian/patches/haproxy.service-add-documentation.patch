@@ -1,0 +1,17 @@
+Subject: Add documentation field to the systemd unit
+Author: Apollon Oikonomopoulos <apoikos@gmail.com>
+
+Forwarded: no
+Last-Update: 2014-01-03
+Index: haproxy/contrib/systemd/haproxy.service.in
+===================================================================
+--- haproxy.orig/contrib/systemd/haproxy.service.in
++++ haproxy/contrib/systemd/haproxy.service.in
+@@ -1,5 +1,7 @@
+ [Unit]
+ Description=HAProxy Load Balancer
++Documentation=man:haproxy(1)
++Documentation=file:/usr/share/doc/haproxy/configuration.txt.gz
+ After=network.target rsyslog.service
+ 
+ [Service]
