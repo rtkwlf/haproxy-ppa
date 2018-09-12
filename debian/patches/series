@@ -5,6 +5,3 @@ haproxy.service-use-environment-variables.patch
 
 # applied during the build process:
 # debianize-dconv.patch
-
-# Upstream, not released yet:
-0001-BUG-MEDIUM-cache-don-t-cache-when-an-Authorization-h.patch

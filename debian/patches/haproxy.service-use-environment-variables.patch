@@ -1,14 +1,21 @@
-Author: Apollon Oikonomopoulos <apoikos@debian.org>
-Description: Use the variables from /etc/default/haproxy
- This will allow seamless upgrades from the sysvinit system while respecting
- any changes the users may have made. It will also make local configuration
- easier than overriding the systemd unit file.
+From: Apollon Oikonomopoulos <apoikos@debian.org>
+Date: Sun, 25 Mar 2018 11:31:50 +0200
+Subject: Use the variables from /etc/default/haproxy
 
+This will allow seamless upgrades from the sysvinit system while respecting
+any changes the users may have made. It will also make local configuration
+easier than overriding the systemd unit file.
 Last-Update: 2014-06-20
 Forwarded: not-needed
+---
+ contrib/systemd/haproxy.service.in | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/systemd/haproxy.service.in b/contrib/systemd/haproxy.service.in
+index ac88c37..0dd36d1 100644
 --- a/contrib/systemd/haproxy.service.in
 +++ b/contrib/systemd/haproxy.service.in
-@@ -5,10 +5,11 @@
+@@ -5,10 +5,11 @@ Documentation=file:/usr/share/doc/haproxy/configuration.txt.gz
  After=network.target rsyslog.service
  
  [Service]

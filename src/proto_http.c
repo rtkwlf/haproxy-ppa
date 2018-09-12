@@ -3451,7 +3451,7 @@ int http_process_req_common(struct stream *s, struct channel *req, int an_bit, s
 		    s->req.buf->p, &txn->hdr_idx, &ctx)) {
 			if (unlikely(http_header_add_tail2(&txn->req,
 			    &txn->hdr_idx, "Early-Data: 1",
-			    strlen("Early-Data: 1"))) < 0) {
+			    strlen("Early-Data: 1")) < 0)) {
 				goto return_bad_req;
 			 }
 		}
@@ -7722,6 +7722,15 @@ void check_request_for_cacheability(struct stream *s, struct channel *chn)
 				pragma_found = 1;
 				continue;
 			}
+		}
+
+		/* Don't use the cache and don't try to store if we found the
+		 * Authorization header */
+		val = http_header_match2(cur_ptr, cur_end, "Authorization", 13);
+		if (val) {
+			txn->flags &= ~TX_CACHEABLE & ~TX_CACHE_COOK;
+			txn->flags |= TX_CACHE_IGNORE;
+			continue;
 		}
 
 		val = http_header_match2(cur_ptr, cur_end, "Cache-control", 13);

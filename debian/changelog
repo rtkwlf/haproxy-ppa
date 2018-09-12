@@ -1,3 +1,85 @@
+haproxy (1.8.13-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 01 Aug 2018 13:28:17 +0200
+
+haproxy (1.8.13-1) unstable; urgency=medium
+
+  * New upstream version.
+    - BUG/MEDIUM: h2: don't accept new streams if conn_streams are still
+                  in excess
+    - BUG/MEDIUM: h2: make sure the last stream closes the connection
+                  after a timeout
+    - BUG/MEDIUM: h2: never leave pending data in the output buffer on close
+    - BUG/MEDIUM: h2: prevent orphaned streams from blocking a connection
+                  forever
+    - BUG/MEDIUM: stats: don't ask for more data as long as we're responding
+    - BUG/MEDIUM: stream-int: don't immediately enable reading when the
+                  buffer was reportedly full
+    - BUG/MEDIUM: threads/sync: use sched_yield when available
+    - BUG/MEDIUM: threads: Fix the exit condition of the thread barrier
+    - BUG/MEDIUM: threads: properly fix nbthreads == MAX_THREADS
+    - BUG/MEDIUM: threads: unbreak "bind" referencing an incorrect thread
+                  number
+  * d/patches: drop systemd exit status patch (applied upstream).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 01 Aug 2018 11:36:20 +0200
+
+haproxy (1.8.12-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 27 Jun 2018 20:11:41 +0200
+
+haproxy (1.8.12-1) unstable; urgency=medium
+
+  * New upstream version.
+     - BUG/MAJOR: stick_table: Complete incomplete SEGV fix
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 27 Jun 2018 20:05:50 +0200
+
+haproxy (1.8.11-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 26 Jun 2018 18:33:10 +0200
+
+haproxy (1.8.11-1) unstable; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: Stick-tables crash with segfault when the key is not in
+                 the stick-table
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 26 Jun 2018 18:26:05 +0200
+
+haproxy (1.8.10-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sat, 23 Jun 2018 12:34:19 +0200
+
+haproxy (1.8.10-1) unstable; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: lua: Dead lock with sockets
+    - BUG/MAJOR: map: fix a segfault when using http-request set-map
+    - BUG/MAJOR: ssl: OpenSSL context is stored in non-reserved memory slot
+    - BUG/MAJOR: ssl: Random crash with cipherlist capture
+    - BUG/MEDIUM: cache: don't cache when an Authorization header is present
+    - BUG/MEDIUM: dns: Delay the attempt to run a DNS resolution on check
+                  failure.
+    - BUG/MEDIUM: fd: Don't modify the update_mask in fd_dodelete().
+    - BUG/MEDIUM: fd: Only check update_mask against all_threads_mask.
+    - BUG/MEDIUM: servers: Add srv_addr default placeholder to the state file
+    - BUG/MEDIUM: stick-tables: Decrement ref_cnt in table_* converters
+    - BUG/MEDIUM: threads: Use the sync point to check active jobs and exit
+    - BUG/MEDIUM: threads: handle signal queue only in thread 0
+  * Remove patch from CVE. Included upstream.
+  * d/patches: add a patch for clean stop with systemd.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 22 Jun 2018 20:21:37 +0200
+
 haproxy (1.8.9-2ppa1~xenial) xenial; urgency=medium
 
   * Backport for Xenial (PPA).

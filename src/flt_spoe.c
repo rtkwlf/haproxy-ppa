@@ -310,12 +310,13 @@ struct spoe_version {
 
 /* All supported versions */
 static struct spoe_version supported_versions[] = {
-	{"1.0", 1000, 1000},
+	/* 1.0 is now unsupported because of a bug about frame's flags*/
+	{"2.0", 2000, 2000},
 	{NULL,  0, 0}
 };
 
 /* Comma-separated list of supported versions */
-#define SUPPORTED_VERSIONS_VAL  "1.0"
+#define SUPPORTED_VERSIONS_VAL  "2.0"
 
 /* Convert a string to a SPOE version value. The string must follow the format
  * "MAJOR.MINOR". It will be concerted into the integer (1000 * MAJOR + MINOR).
@@ -395,6 +396,7 @@ spoe_prepare_hahello_frame(struct appctx *appctx, char *frame, size_t size)
 	*p++ = SPOE_FRM_T_HAPROXY_HELLO;
 
 	/* Set flags */
+	flags = htonl(flags);
 	memcpy(p, (char *)&flags, 4);
 	p += 4;
 
@@ -484,6 +486,7 @@ spoe_prepare_hadiscon_frame(struct appctx *appctx, char *frame, size_t size)
 	*p++ = SPOE_FRM_T_HAPROXY_DISCON;
 
 	/* Set flags */
+	flags = htonl(flags);
 	memcpy(p, (char *)&flags, 4);
 	p += 4;
 
@@ -555,6 +558,7 @@ spoe_prepare_hanotify_frame(struct appctx *appctx, struct spoe_context *ctx,
 	*p++ = SPOE_FRM_T_HAPROXY_NOTIFY;
 
 	/* Set flags */
+	flags = htonl(flags);
 	memcpy(p, (char *)&flags, 4);
 	p += 4;
 
@@ -611,6 +615,7 @@ spoe_prepare_hafrag_frame(struct appctx *appctx, struct spoe_context *ctx,
 	*p++ = SPOE_FRM_T_UNSET;
 
 	/* Set flags */
+	flags = htonl(flags);
 	memcpy(p, (char *)&flags, 4);
 	p += 4;
 
@@ -665,6 +670,7 @@ spoe_handle_agenthello_frame(struct appctx *appctx, char *frame, size_t size)
 
 	/* Retrieve flags */
 	memcpy((char *)&flags, p, 4);
+	flags = ntohl(flags);
 	p += 4;
 
 	/* Fragmentation is not supported for HELLO frame */
@@ -848,6 +854,7 @@ spoe_handle_agentdiscon_frame(struct appctx *appctx, char *frame, size_t size)
 
 	/* Retrieve flags */
 	memcpy((char *)&flags, p, 4);
+	flags = ntohl(flags);
 	p += 4;
 
 	/* Fragmentation is not supported for DISCONNECT frame */
@@ -958,6 +965,7 @@ spoe_handle_agentack_frame(struct appctx *appctx, struct spoe_context **ctx,
 
 	/* Retrieve flags */
 	memcpy((char *)&flags, p, 4);
+	flags = ntohl(flags);
 	p += 4;
 
 	/* Fragmentation is not supported for now */
@@ -1020,6 +1028,8 @@ spoe_handle_agentack_frame(struct appctx *appctx, struct spoe_context **ctx,
 		    (unsigned int)stream_id, (unsigned int)frame_id);
 
 	SPOE_APPCTX(appctx)->status_code = SPOE_FRM_ERR_FRAMEID_NOTFOUND;
+	if (appctx->st0 == SPOE_APPCTX_ST_WAITING_SYNC_ACK)
+		return -1;
 	return 0;
 
   found:

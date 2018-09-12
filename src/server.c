@@ -1897,7 +1897,7 @@ int parse_server(const char *file, int linenum, char **args, struct proxy *curpr
 			goto out;
 		}
 		else if (warnifnotcap(curproxy, PR_CAP_BE, file, linenum, args[0], NULL))
-			err_code |= ERR_ALERT | ERR_FATAL;
+			err_code |= ERR_WARN;
 
 		/* There is no mandatory first arguments for default server. */
 		if (srv) {
@@ -2898,7 +2898,8 @@ static void srv_update_state(struct server *srv, int version, char **params)
 			server_recalc_eweight(srv);
 
 			/* load server IP address */
-			srv->lastaddr = strdup(params[0]);
+			if (strcmp(params[0], "-"))
+				srv->lastaddr = strdup(params[0]);
 
 			if (fqdn && srv->hostname) {
 				if (!strcmp(srv->hostname, fqdn)) {

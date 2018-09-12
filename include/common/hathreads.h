@@ -28,9 +28,16 @@
 extern THREAD_LOCAL unsigned int tid;     /* The thread id */
 extern THREAD_LOCAL unsigned long tid_bit; /* The bit corresponding to the thread id */
 
+/* Note about all_threads_mask :
+ *    - with threads support disabled, this symbol is defined as zero (0UL).
+ *    - with threads enabled, this variable is never zero, it contains the mask
+ *      of enabled threads. Thus if only one thread is enabled, it equals 1.
+ */
+
 #ifndef USE_THREAD
 
 #define MAX_THREADS 1
+#define all_threads_mask 0UL
 
 #define __decl_hathreads(decl)
 
@@ -66,7 +73,7 @@ extern THREAD_LOCAL unsigned long tid_bit; /* The bit corresponding to the threa
 
 #define HA_BARRIER() do { } while (0)
 
-#define THREAD_SYNC_INIT(m)  do { /* do nothing */ } while(0)
+#define THREAD_SYNC_INIT()   do { /* do nothing */ } while(0)
 #define THREAD_SYNC_ENABLE() do { /* do nothing */ } while(0)
 #define THREAD_WANT_SYNC()   do { /* do nothing */ } while(0)
 #define THREAD_ENTER_SYNC()  do { /* do nothing */ } while(0)
@@ -88,6 +95,8 @@ extern THREAD_LOCAL unsigned long tid_bit; /* The bit corresponding to the threa
 #define HA_RWLOCK_RDLOCK(lbl, l)   do { /* do nothing */ } while(0)
 #define HA_RWLOCK_TRYRDLOCK(lbl, l)   ({ 0; })
 #define HA_RWLOCK_RDUNLOCK(lbl, l) do { /* do nothing */ } while(0)
+
+#define ha_sigmask(how, set, oldset)  sigprocmask(how, set, oldset)
 
 #else /* USE_THREAD */
 
@@ -185,7 +194,7 @@ extern THREAD_LOCAL unsigned long tid_bit; /* The bit corresponding to the threa
 
 #define HA_BARRIER() pl_barrier()
 
-#define THREAD_SYNC_INIT(m)   thread_sync_init(m)
+#define THREAD_SYNC_INIT()    thread_sync_init()
 #define THREAD_SYNC_ENABLE()  thread_sync_enable()
 #define THREAD_WANT_SYNC()    thread_want_sync()
 #define THREAD_ENTER_SYNC()   thread_enter_sync()
@@ -193,7 +202,7 @@ extern THREAD_LOCAL unsigned long tid_bit; /* The bit corresponding to the threa
 #define THREAD_NO_SYNC()      thread_no_sync()
 #define THREAD_NEED_SYNC()    thread_need_sync()
 
-int  thread_sync_init(unsigned long mask);
+int  thread_sync_init();
 void thread_sync_enable(void);
 void thread_want_sync(void);
 void thread_enter_sync(void);
@@ -201,7 +210,10 @@ void thread_exit_sync(void);
 int  thread_no_sync(void);
 int  thread_need_sync(void);
 
-extern unsigned long all_threads_mask;
+extern volatile unsigned long all_threads_mask;
+
+#define ha_sigmask(how, set, oldset)  pthread_sigmask(how, set, oldset)
+
 
 #if defined(DEBUG_THREAD) || defined(DEBUG_FULL)
 
@@ -686,5 +698,6 @@ static inline void __spin_unlock(enum lock_label lbl, struct ha_spinlock *l,
 
 /* Dummy I/O handler used by the sync pipe.*/
 void thread_sync_io_handler(int fd);
+int parse_nbthread(const char *arg, char **err);
 
 #endif /* _COMMON_HATHREADS_H */
