@@ -15,3 +15,15 @@ a. For sysklogd, add SYSLOG="-a /var/lib/haproxy/dev/log" to
    /etc/default/syslog.
 b. For inetutils-syslogd, add SYSLOGD_OPTS="-a /var/lib/haproxy/dev/log" to
    /etc/default/inetutils-syslogd.
+
+Prometheus exporter
+-------------------
+HAProxy is shipped with a builtin Prometheus exporter. To enable it,
+you need to configure the Prometheus endpoint:
+
+    frontend stats
+        bind *:8404
+        http-request use-service prometheus-exporter if { path /metrics }
+        stats enable
+        stats uri /stats
+        stats refresh 10s

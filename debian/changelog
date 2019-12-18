@@ -1,3 +1,443 @@
+haproxy (2.0.11-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 13 Dec 2019 20:04:21 +0100
+
+haproxy (2.0.11-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MAJOR: dns: add minimalist error processing on the Rx path
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 13 Dec 2019 19:22:03 +0100
+
+haproxy (2.0.10-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 26 Nov 2019 13:27:31 +0100
+
+haproxy (2.0.10-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MAJOR: h2: make header field name filtering stronger
+    - BUG/MAJOR: h2: reject header values containing invalid chars
+    - BUG/MAJOR: mux-h2: don't try to decode a response HEADERS frame in
+                 idle state
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 26 Nov 2019 13:22:17 +0100
+
+haproxy (2.0.9-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sun, 17 Nov 2019 05:48:32 +0100
+
+haproxy (2.0.9-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MAJOR: stream-int: Don't receive data from mux until SI_ST_EST
+                 is reached
+
+ -- Vincent Bernat <bernat@debian.org>  Sat, 16 Nov 2019 17:38:51 +0100
+
+haproxy (2.0.8-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 23 Oct 2019 11:00:25 +0200
+
+haproxy (2.0.8-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MAJOR: idle conns: schedule the cleanup task on the correct
+                 threads
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 23 Oct 2019 08:55:55 +0200
+
+haproxy (2.0.7-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sat, 28 Sep 2019 09:39:40 +0200
+
+haproxy (2.0.7-1) unstable; urgency=medium
+
+  * New upstream release.  
+    - BUG/MAJOR: mux-h2: Handle HEADERS frames received after a RST_STREAM
+                 frame
+    - BUG/MAJOR: mux_h2: Don't consume more payload than received for
+                 skipped frames
+    - BUG/MEDIUM: checks: make sure the connection is ready before trying
+                  to recv
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 27 Sep 2019 19:14:12 +0200
+
+haproxy (2.0.6-2ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 18 Sep 2019 08:09:01 +0200
+
+haproxy (2.0.6-2) unstable; urgency=medium
+
+  * d/patches: fix regression with checks.
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 18 Sep 2019 08:02:53 +0200
+
+haproxy (2.0.6-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 13 Sep 2019 21:31:52 +0200
+
+haproxy (2.0.6-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MAJOR: ssl: ssl_sock was not fully initialized.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 13 Sep 2019 21:25:38 +0200
+
+haproxy (2.0.5-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 16 Aug 2019 19:57:27 +0200
+
+haproxy (2.0.5-1) unstable; urgency=medium
+
+  * New upstream release.
+    - BUG/MEDIUM: mux_h1: Don't bother subscribing in recv if we're not
+                  connected.
+    - BUG/MEDIUM: mux_pt: Don't call unsubscribe if we did not subscribe.
+    - BUG/MEDIUM: proxy: Don't forget the SF_HTX flag when upgrading
+                  TCP=>H1+HTX.
+    - BUG/MEDIUM: proxy: Don't use cs_destroy() when freeing the
+                  conn_stream.
+    - BUG/MEDIUM: stick-table: Wrong stick-table backends parsing.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 16 Aug 2019 19:51:24 +0200
+
+haproxy (2.0.4-1ppa2~xenial) xenial; urgency=medium
+
+  * d/haproxy.cfg: restore previous version (no TLSv1.3 support).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 09 Aug 2019 16:47:04 +0200
+
+haproxy (2.0.4-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 09 Aug 2019 14:32:42 +0200
+
+haproxy (2.0.4-1) unstable; urgency=medium
+
+  * New upstream release. Upload to unstable.
+    - BUG/MAJOR: http/sample: use a static buffer for raw -> htx
+                 conversion
+    - BUG/MAJOR: queue/threads: avoid an AB/BA locking issue in
+                 process_srv_queue()
+  * d/haproxy.cfg: update default cipher lists to more secure defaults.
+    TLSv1.0 and TLSv1.1 are disabled, as well as TLS tickets (they are
+    breaking forward secrecy unless correctly rotated).
+    Closes: #932763.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 09 Aug 2019 14:22:23 +0200
+
+haproxy (2.0.3-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 23 Jul 2019 19:03:44 +0200
+
+haproxy (2.0.3-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/CRITICAL: http_ana: Fix parsing of malformed cookies which start by
+                    a delimiter (CVE-2019-14241)
+    - BUG/MEDIUM: checks: Don't attempt to receive data if we already
+                  subscribed.
+    - BUG/MEDIUM: http/htx: unbreak option http_proxy
+    - DOC: htx: Update comments in HTX files
+    - BUG/MEDIUM: mux-h1: Trim excess server data at the end of a transaction
+    - BUG/MEDIUM: tcp-checks: do not dereference inexisting conn_stream
+  * Bump Standards-Version to 4.4.0; no changes needed
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Tue, 23 Jul 2019 13:31:31 -0300
+
+haproxy (2.0.2-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 17 Jul 2019 15:26:49 +0200
+
+haproxy (2.0.2-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: listener: fix thread safety in resume_listener()
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 17 Jul 2019 12:19:54 +0200
+
+haproxy (2.0.1-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 27 Jun 2019 08:43:39 +0200
+
+haproxy (2.0.1-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: sample: Wrong stick-table name parsing in "if/unless" ACL
+                 condition.
+    - BUG/MAJOR: mux-h1: Don't crush trash chunk area when outgoing
+                 message is formatted
+  * d/rules: fix crash during reload due to libgcc_s.so missing when
+    chrooted.
+
+ -- Vincent Bernat <bernat@debian.org>  Mon, 24 Jun 2019 19:28:26 +0200
+
+haproxy (2.0.0-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 21 Jun 2019 13:05:55 +0200
+
+haproxy (2.0.0-1) experimental; urgency=medium
+
+  * New upstream version.
+  * d/watch: update to follow 2.0.
+  * d/gbp.conf: update for 2.0 and experimental.
+  * d/rules: update to use linux-glibc target.
+  * d/rules: enable prometheus exporter.
+  * d/patches: refresh patches.
+  * d/vim-haproxy.install: update path to vim syntax file.
+  * d/README.Debian: remove outdated information.
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 20 Jun 2019 11:40:19 +0200
+
+haproxy (1.9.8-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 16 May 2019 21:35:44 +0200
+
+haproxy (1.9.8-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: map/acl: real fix segfault during show map/acl on CLI
+    - BUG/MAJOR: mux-h2: do not add a stream twice to the send list
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 16 May 2019 01:50:10 +0200
+
+haproxy (1.9.7-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sun, 28 Apr 2019 17:46:11 +0200
+
+haproxy (1.9.7-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: http_fetch: Get the channel depending on the keyword used
+    - BUG/MAJOR: lb/threads: fix AB/BA locking issue in round-robin LB
+    - BUG/MAJOR: lb/threads: fix insufficient locking on round-robin LB
+    - BUG/MAJOR: muxes: Use the HTX mode to find the best mux for HTTP
+                 proxies only
+    - BUG/MAJOR: task: make sure never to delete a queued task
+
+ -- Vincent Bernat <bernat@debian.org>  Sun, 28 Apr 2019 17:37:04 +0200
+
+haproxy (1.9.6-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sat, 30 Mar 2019 14:35:26 +0100
+
+haproxy (1.9.6-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: checks: segfault during tcpcheck_main
+
+ -- Vincent Bernat <bernat@debian.org>  Sat, 30 Mar 2019 12:43:33 +0100
+
+haproxy (1.9.5-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 20 Mar 2019 08:20:16 +0100
+
+haproxy (1.9.5-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: cache/htx: Set the start-line offset when a cached object
+                 is served
+    - BUG/MAJOR: fd/threads, task/threads: ensure all spin locks are
+                 unlocked
+    - BUG/MAJOR: listener: Make sure the listener exist before using it.
+    - BUG/MAJOR: mux-h2: fix race condition between close on both ends
+    - BUG/MAJOR: spoe: Don't try to get agent config during SPOP
+                 healthcheck
+    - BUG/MAJOR: spoe: Fix initialization of thread-dependent fields
+    - BUG/MAJOR: stats: Fix how huge POST data are read from the channel
+    - BUG/MAJOR: stream: avoid double free on unique_id
+    - BUG/MAJOR: tasks: Use the TASK_GLOBAL flag to know if we're in the
+                 global rq.
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 19 Mar 2019 20:13:48 +0100
+
+haproxy (1.9.4-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 07 Feb 2019 12:54:11 +0100
+
+haproxy (1.9.4-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: config: verify that targets of track-sc and stick rules
+                 are present
+    - BUG/MAJOR: htx/backend: Make all tests on HTTP messages compatible
+                 with HTX
+    - BUG/MAJOR: spoe: verify that backends used by SPOE cover all their
+                 callers' processes
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 07 Feb 2019 12:48:42 +0100
+
+haproxy (1.9.3-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 29 Jan 2019 15:00:35 +0100
+
+haproxy (1.9.3-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: mux-h2: don't destroy the stream on failed allocation in
+                 h2_snd_buf()
+    - BUG/MEDIUM: checks: fix recent regression on agent-check making it
+                  crash
+    - BUG/MEDIUM: ssl: Fix handling of TLS 1.3 KeyUpdate messages
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 29 Jan 2019 12:59:10 +0100
+
+haproxy (1.9.2-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Mon, 21 Jan 2019 21:41:51 +0100
+
+haproxy (1.9.2-1) experimental; urgency=medium
+
+  * New upstream version.
+    - BUG/MAJOR: cache: fix confusion between zero and uninitialized cache
+                 key
+    - BUG/MEDIUM: checks: Avoid having an associated server for email
+                  checks.
+    - BUG/MEDIUM: connection: properly unregister the mux on failed
+                  initialization
+    - BUG/MEDIUM: h1: Get the h1m state when restarting the headers
+                  parsing
+    - BUG/MEDIUM: h1: Make sure we destroy an inactive connectin that did
+                  shutw.
+    - BUG/MEDIUM: init: Initialize idle_orphan_conns for first server in
+                  server-template
+    - BUG/MEDIUM: mux-h2: decode trailers in HEADERS frames
+    - BUG/MEDIUM: ssl: Disable anti-replay protection and set max data
+                  with 0RTT.
+    - BUG/MEDIUM: ssl: missing allocation failure checks loading tls key
+                  file
+    - BUG/MEDIUM: stats: Get the right scope pointer depending on HTX is
+                  used or not
+  * d/patches: removal of CVE-2018-20615.patch (applied upstream)
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 17 Jan 2019 19:19:27 +0100
+
+haproxy (1.9.0-2ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Tue, 08 Jan 2019 11:39:13 -0500
+
+haproxy (1.9.0-2) experimental; urgency=medium
+
+  * Fix out-of-bounds read in HTTP2 mux (CVE-2018-20615).
+    Possible crash in H2 HEADERS frame decoder when the PRIORITY flag
+    is present, due to a missing frame size check.
+  * Bump Standards-Version to 4.3.0; no changes needed.
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Thu, 03 Jan 2019 12:41:02 +0200
+
+haproxy (1.9.0-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 21 Dec 2018 12:36:15 +0100
+
+haproxy (1.9.0-1) experimental; urgency=medium
+
+  * New upstream version 1.9.0.
+    See https://www.haproxy.com/blog/haproxy-1-9-has-arrived/.
+  * d/watch: update to follow 1.9.
+  * d/gbp.conf: update for 1.9 and experimental.
+  * d/rules: do not override CFLAGS, hijack DEBUG_CFLAGS for this instead.
+  * d/patches: add regression fix for DNS.
+
+ -- Vincent Bernat <bernat@debian.org>  Fri, 21 Dec 2018 11:13:41 +0100
+
+haproxy (1.8.15-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Wed, 19 Dec 2018 18:02:46 +0100
+
+haproxy (1.8.15-1) unstable; urgency=high
+
+  [ Vincent Bernat ]
+  * d/rules: switch to pcre2. Closes: #911933.
+
+  [ Apollon Oikonomopoulos ]
+  * New upstream version 1.8.15
+    - BUG: dns: Fix off-by-one write in dns_validate_dns_response() (
+    - BUG: dns: Fix out-of-bounds read via signedness error in
+      dns_validate_dns_response()
+    - BUG: dns: Prevent out-of-bounds read in dns_read_name()
+    - BUG: dns: Prevent out-of-bounds read in dns_validate_dns_response()
+      (CVE-2018-20102, closes: #916308)
+    - BUG: dns: Prevent stack-exhaustion via recursion loop in dns_read_name
+      (CVE-2018-20103, closes: #916307)
+    - BUG/MAJOR: http: http_txn_get_path() may deference an inexisting buffer
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Fri, 14 Dec 2018 15:31:04 +0200
+
+haproxy (1.8.14-1ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Sun, 23 Sep 2018 12:31:44 +0200
+
+haproxy (1.8.14-1) unstable; urgency=medium
+
+  * New upstream version.
+    - BUG/CRITICAL: hpack: fix improper sign check on the header index
+                    value (already fixed in 1.8.13-2)
+    - BUG/MAJOR: kqueue: Don't reset the changes number by accident.
+    - BUG/MAJOR: thread: lua: Wrong SSL context initialization.
+
+ -- Vincent Bernat <bernat@debian.org>  Sun, 23 Sep 2018 12:25:03 +0200
+
+haproxy (1.8.13-2ppa1~xenial) xenial; urgency=medium
+
+  * Backport for Xenial (PPA).
+
+ -- Vincent Bernat <bernat@debian.org>  Thu, 20 Sep 2018 16:04:19 +0200
+
+haproxy (1.8.13-2) unstable; urgency=high
+
+  * Fix improper sign check on the HPACK header index value (CVE-2018-14645)
+  * Bump Standards-Version to 4.2.1; no changes needed
+
+ -- Apollon Oikonomopoulos <apoikos@debian.org>  Wed, 19 Sep 2018 22:46:58 +0300
+
 haproxy (1.8.13-1ppa1~xenial) xenial; urgency=medium
 
   * Backport for Xenial (PPA).

@@ -23,9 +23,11 @@
 #define _PROTO_PROTOCOL_H
 
 #include <sys/socket.h>
+#include <common/hathreads.h>
 #include <types/protocol.h>
 
-extern struct protocol *__protocol_by_family[AF_MAX];
+extern struct protocol *__protocol_by_family[AF_CUST_MAX];
+__decl_hathreads(extern HA_SPINLOCK_T proto_lock);
 
 /* Registers the protocol <proto> */
 void protocol_register(struct protocol *proto);
@@ -35,7 +37,7 @@ void protocol_register(struct protocol *proto);
  */
 void protocol_unregister(struct protocol *proto);
 
-/* binds all listeneres of all registered protocols. Returns a composition
+/* binds all listeners of all registered protocols. Returns a composition
  * of ERR_NONE, ERR_RETRYABLE, ERR_FATAL.
  */
 int protocol_bind_all(char *errmsg, int errlen);
@@ -56,7 +58,7 @@ int protocol_enable_all(void);
 /* returns the protocol associated to family <family> or NULL if not found */
 static inline struct protocol *protocol_by_family(int family)
 {
-	if (family >= 0 && family < AF_MAX)
+	if (family >= 0 && family < AF_CUST_MAX)
 		return __protocol_by_family[family];
 	return NULL;
 }

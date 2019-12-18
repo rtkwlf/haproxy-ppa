@@ -12,16 +12,16 @@ MAKEARGS=DESTDIR=debian/haproxy \
 	 IGNOREGIT=true \
 	 MANDIR=/usr/share/man \
 	 DOCDIR=/usr/share/doc/haproxy \
-	 USE_PCRE=1 PCREDIR= \
-	 USE_PCRE_JIT=1 \
+	 USE_PCRE2=1 \
+	 USE_PCRE2_JIT=1 \
 	 USE_OPENSSL=1 \
 	 USE_ZLIB=1 \
 	 USE_LUA=1 \
-	 USE_GETADDRINFO=1 \
-	 LUA_INC=/usr/include/lua5.3
+	 LUA_INC=/usr/include/lua5.3 \
+	 EXTRA_OBJS="contrib/prometheus-exporter/service-prometheus.o"
 
 ifeq ($(DEB_HOST_ARCH_OS),linux)
-        MAKEARGS+= USE_NS=1 TARGET=linux2628 USE_SYSTEMD=1
+        MAKEARGS+= TARGET=linux-glibc USE_SYSTEMD=1
 else ifeq ($(DEB_HOST_ARCH_OS),kfreebsd)
         MAKEARGS+= TARGET=freebsd
 else
@@ -33,10 +33,12 @@ ifneq ($(filter amd64 i386,$(DEB_HOST_ARCH_CPU)),)
 endif
 
 ifneq ($(filter armel mips mipsel m68k powerpc powerpcspe sh4,$(DEB_HOST_ARCH)),)
-	MAKEARGS+= ADDLIB=-latomic
+	MAKEARGS+= ADDLIB="-latomic -Wl,--no-as-needed -lgcc_s -Wl,--as-needed"
+else
+	MAKEARGS+= ADDLIB="-Wl,--no-as-needed -lgcc_s -Wl,--as-needed"
 endif
 
-MAKEARGS += CFLAGS="$(CFLAGS) $(CPPFLAGS)"
+MAKEARGS += DEBUG_CFLAGS="$(CFLAGS) $(CPPFLAGS)"
 MAKEARGS += LDFLAGS="$(LDFLAGS)"
 MAKEARGS += VERSION="$(DEB_VERSION_UPSTREAM)"
 MAKEARGS += SUBVERS="-$(lastword $(subst -, ,$(DEB_VERSION)))"

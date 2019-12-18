@@ -13,6 +13,7 @@
 #include <common/config.h>
 #include <common/buffer.h>
 #include <common/debug.h>
+#include <common/http.h>
 #include <common/memory.h>
 
 #include <types/global.h>
@@ -21,17 +22,18 @@
 #include <proto/connection.h>
 #include <proto/listener.h>
 #include <proto/log.h>
-#include <proto/proto_http.h>
 #include <proto/proxy.h>
 #include <proto/session.h>
 #include <proto/stream.h>
 #include <proto/tcp_rules.h>
 #include <proto/vars.h>
 
-struct pool_head *pool_head_session;
+DECLARE_POOL(pool_head_session, "session", sizeof(struct session));
+DECLARE_POOL(pool_head_sess_srv_list, "session server list",
+		sizeof(struct sess_srv_list));
 
 static int conn_complete_session(struct connection *conn);
-static struct task *session_expire_embryonic(struct task *t);
+static struct task *session_expire_embryonic(struct task *t, void *context, unsigned short state);
 
 /* Create a a new session and assign it to frontend <fe>, listener <li>,
  * origin <origin>, set the current date and clear the stick counters pointers.
@@ -52,40 +54,57 @@ struct session *session_new(struct proxy *fe, struct listener *li, enum obj_type
 		memset(sess->stkctr, 0, sizeof(sess->stkctr));
 		vars_init(&sess->vars, SCOPE_SESS);
 		sess->task = NULL;
-		HA_ATOMIC_UPDATE_MAX(&fe->fe_counters.conn_max,
-				     HA_ATOMIC_ADD(&fe->feconn, 1));
-		if (li)
-			proxy_inc_fe_conn_ctr(li, fe);
-		HA_ATOMIC_ADD(&totalconn, 1);
-		HA_ATOMIC_ADD(&jobs, 1);
+		sess->t_handshake = -1; /* handshake not done yet */
+		_HA_ATOMIC_ADD(&totalconn, 1);
+		_HA_ATOMIC_ADD(&jobs, 1);
+		LIST_INIT(&sess->srv_list);
+		sess->idle_conns = 0;
+		sess->flags = SESS_FL_NONE;
 	}
 	return sess;
 }
 
 void session_free(struct session *sess)
 {
-	HA_ATOMIC_SUB(&sess->fe->feconn, 1);
+	struct connection *conn, *conn_back;
+	struct sess_srv_list *srv_list, *srv_list_back;
+
 	if (sess->listener)
 		listener_release(sess->listener);
 	session_store_counters(sess);
 	vars_prune_per_sess(&sess->vars);
+	conn = objt_conn(sess->origin);
+	if (conn != NULL && conn->mux)
+		conn->mux->destroy(conn->ctx);
+	list_for_each_entry_safe(srv_list, srv_list_back, &sess->srv_list, srv_list) {
+		list_for_each_entry_safe(conn, conn_back, &srv_list->conn_list, session_list) {
+			LIST_DEL_INIT(&conn->session_list);
+			if (conn->mux) {
+				conn->owner = NULL;
+				conn->flags &= ~CO_FL_SESS_IDLE;
+				if (!srv_add_to_idle_list(objt_server(conn->target), conn))
+					conn->mux->destroy(conn->ctx);
+			} else {
+				/* We have a connection, but not yet an associated mux.
+				 * So destroy it now.
+				 */
+				conn_stop_tracking(conn);
+				conn_full_close(conn);
+				conn_free(conn);
+			}
+		}
+		pool_free(pool_head_sess_srv_list, srv_list);
+	}
 	pool_free(pool_head_session, sess);
-	HA_ATOMIC_SUB(&jobs, 1);
+	_HA_ATOMIC_SUB(&jobs, 1);
 }
 
 /* callback used from the connection/mux layer to notify that a connection is
- * gonig to be released.
+ * going to be released.
  */
 void conn_session_free(struct connection *conn)
 {
 	session_free(conn->owner);
-}
-
-/* perform minimal intializations, report 0 in case of error, 1 if OK. */
-int init_session()
-{
-	pool_head_session = create_pool("session", sizeof(struct session), MEM_F_SHARED);
-	return pool_head_session != NULL;
 }
 
 /* count a new session to keep frontend, listener and track stats up to date */
@@ -114,11 +133,11 @@ static void session_count_new(struct session *sess)
 }
 
 /* This function is called from the protocol layer accept() in order to
- * instanciate a new session on behalf of a given listener and frontend. It
+ * instantiate a new session on behalf of a given listener and frontend. It
  * returns a positive value upon success, 0 if the connection can be ignored,
  * or a negative value upon critical failure. The accepted file descriptor is
  * closed if we return <= 0. If no handshake is needed, it immediately tries
- * to instanciate a new stream. The created connection's owner points to the
+ * to instantiate a new stream. The created connection's owner points to the
  * new session until the upper layers are created.
  */
 int session_accept_fd(struct listener *l, int cfd, struct sockaddr_storage *addr)
@@ -134,32 +153,32 @@ int session_accept_fd(struct listener *l, int cfd, struct sockaddr_storage *addr
 	if (unlikely((cli_conn = conn_new()) == NULL))
 		goto out_close;
 
-	conn_prepare(cli_conn, l->proto, l->bind_conf->xprt);
-
 	cli_conn->handle.fd = cfd;
 	cli_conn->addr.from = *addr;
 	cli_conn->flags |= CO_FL_ADDR_FROM_SET;
 	cli_conn->target = &l->obj_type;
 	cli_conn->proxy_netns = l->netns;
 
+	conn_prepare(cli_conn, l->proto, l->bind_conf->xprt);
 	conn_ctrl_init(cli_conn);
 
 	/* wait for a PROXY protocol header */
-	if (l->options & LI_O_ACC_PROXY) {
+	if (l->options & LI_O_ACC_PROXY)
 		cli_conn->flags |= CO_FL_ACCEPT_PROXY;
-		conn_sock_want_recv(cli_conn);
-	}
 
 	/* wait for a NetScaler client IP insertion protocol header */
-	if (l->options & LI_O_ACC_CIP) {
+	if (l->options & LI_O_ACC_CIP)
 		cli_conn->flags |= CO_FL_ACCEPT_CIP;
-		conn_sock_want_recv(cli_conn);
-	}
 
 	conn_xprt_want_recv(cli_conn);
 	if (conn_xprt_init(cli_conn) < 0)
 		goto out_free_conn;
 
+	/* Add the handshake pseudo-XPRT */
+	if (cli_conn->flags & (CO_FL_ACCEPT_PROXY | CO_FL_ACCEPT_CIP)) {
+		if (xprt_add_hs(cli_conn) != 0)
+			goto out_free_conn;
+	}
 	sess = session_new(p, l, &cli_conn->obj_type);
 	if (!sess)
 		goto out_free_conn;
@@ -279,12 +298,11 @@ int session_accept_fd(struct listener *l, int cfd, struct sockaddr_storage *addr
 	conn_free(cli_conn);
  out_close:
 	listener_release(l);
-	if (ret < 0 && l->bind_conf->xprt == xprt_get(XPRT_RAW) && p->mode == PR_MODE_HTTP) {
+	if (ret < 0 && l->bind_conf->xprt == xprt_get(XPRT_RAW) &&
+	    p->mode == PR_MODE_HTTP && l->bind_conf->mux_proto == NULL) {
 		/* critical error, no more memory, try to emit a 500 response */
-		struct chunk *err_msg = &p->errmsg[HTTP_ERR_500];
-		if (!err_msg->str)
-			err_msg = &http_err_chunks[HTTP_ERR_500];
-		send(cfd, err_msg->str, err_msg->len, MSG_DONTWAIT|MSG_NOSIGNAL);
+		send(cfd, http_err_msgs[HTTP_ERR_500], strlen(http_err_msgs[HTTP_ERR_500]),
+		     MSG_DONTWAIT|MSG_NOSIGNAL);
 	}
 
 	if (fdtab[cfd].owner)
@@ -316,8 +334,9 @@ static void session_prepare_log_prefix(struct session *sess)
 		chunk_printf(&trash, "%s:%d [", pn, get_host_port(&cli_conn->addr.from));
 
 	get_localtime(sess->accept_date.tv_sec, &tm);
-	end = date2str_log(trash.str + trash.len, &tm, &(sess->accept_date), trash.size - trash.len);
-	trash.len = end - trash.str;
+	end = date2str_log(trash.area + trash.data, &tm, &(sess->accept_date),
+		           trash.size - trash.data);
+	trash.data = end - trash.area;
 	if (sess->listener->name)
 		chunk_appendf(&trash, "] %s/%s", sess->fe->id, sess->listener->name);
 	else
@@ -329,7 +348,7 @@ static void session_prepare_log_prefix(struct session *sess)
  * disabled and finally kills the file descriptor. This function requires that
  * sess->origin points to the incoming connection.
  */
-static void session_kill_embryonic(struct session *sess)
+static void session_kill_embryonic(struct session *sess, unsigned short state)
 {
 	int level = LOG_INFO;
 	struct connection *conn = __objt_conn(sess->origin);
@@ -350,7 +369,7 @@ static void session_kill_embryonic(struct session *sess)
 	}
 
 	if (log) {
-		if (!conn->err_code && (task->state & TASK_WOKEN_TIMER)) {
+		if (!conn->err_code && (state & TASK_WOKEN_TIMER)) {
 			if (conn->flags & CO_FL_ACCEPT_PROXY)
 				conn->err_code = CO_ER_PRX_TIMEOUT;
 			else if (conn->flags & CO_FL_ACCEPT_CIP)
@@ -362,33 +381,34 @@ static void session_kill_embryonic(struct session *sess)
 		session_prepare_log_prefix(sess);
 		err_msg = conn_err_code_str(conn);
 		if (err_msg)
-			send_log(sess->fe, level, "%s: %s\n", trash.str, err_msg);
+			send_log(sess->fe, level, "%s: %s\n", trash.area,
+				 err_msg);
 		else
 			send_log(sess->fe, level, "%s: unknown connection error (code=%d flags=%08x)\n",
-				 trash.str, conn->err_code, conn->flags);
+				 trash.area, conn->err_code, conn->flags);
 	}
 
 	/* kill the connection now */
 	conn_stop_tracking(conn);
 	conn_full_close(conn);
 	conn_free(conn);
+	sess->origin = NULL;
 
-	task_delete(task);
-	task_free(task);
+	task_destroy(task);
 	session_free(sess);
 }
 
 /* Manages the embryonic session timeout. It is only called when the timeout
  * strikes and performs the required cleanup.
  */
-static struct task *session_expire_embryonic(struct task *t)
+static struct task *session_expire_embryonic(struct task *t, void *context, unsigned short state)
 {
-	struct session *sess = t->context;
+	struct session *sess = context;
 
-	if (!(t->state & TASK_WOKEN_TIMER))
+	if (!(state & TASK_WOKEN_TIMER))
 		return t;
 
-	session_kill_embryonic(sess);
+	session_kill_embryonic(sess, state);
 	return NULL;
 }
 
@@ -401,6 +421,8 @@ static struct task *session_expire_embryonic(struct task *t)
 static int conn_complete_session(struct connection *conn)
 {
 	struct session *sess = conn->owner;
+
+	sess->t_handshake = tv_ms_elapsed(&sess->tv_accept, &now);
 
 	conn_clear_xprt_done_cb(conn);
 
@@ -420,23 +442,19 @@ static int conn_complete_session(struct connection *conn)
 		goto fail;
 
 	session_count_new(sess);
-	if (conn_install_best_mux(conn, sess->fe->mode == PR_MODE_HTTP, NULL) < 0)
+	if (conn_install_mux_fe(conn, NULL) < 0)
 		goto fail;
 
 	/* the embryonic session's task is not needed anymore */
-	if (sess->task) {
-		task_delete(sess->task);
-		task_free(sess->task);
-		sess->task = NULL;
-	}
-
+	task_destroy(sess->task);
+	sess->task = NULL;
 	conn_set_owner(conn, sess, conn_session_free);
 
 	return 0;
 
  fail:
 	if (sess->task)
-		session_kill_embryonic(sess);
+		session_kill_embryonic(sess, 0);
 	return -1;
 }
 

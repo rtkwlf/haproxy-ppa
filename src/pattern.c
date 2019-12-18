@@ -154,8 +154,7 @@ static THREAD_LOCAL struct sample_data static_sample_data;
 /* This is the root of the list of all pattern_ref avalaibles. */
 struct list pattern_reference = LIST_HEAD_INIT(pattern_reference);
 
-static struct lru64_head *pat_lru_tree;
-__decl_hathreads(HA_SPINLOCK_T pat_lru_tree_lock);
+static THREAD_LOCAL struct lru64_head *pat_lru_tree;
 static unsigned long long pat_lru_seed;
 
 /*
@@ -221,12 +220,12 @@ int pat_parse_str(const char *text, struct pattern *pattern, int mflags, char **
 /* Parse a binary written in hexa. It is allocated. */
 int pat_parse_bin(const char *text, struct pattern *pattern, int mflags, char **err)
 {
-	struct chunk *trash;
+	struct buffer *trash;
 
 	pattern->type = SMP_T_BIN;
 	trash = get_trash_chunk();
 	pattern->len = trash->size;
-	pattern->ptr.str = trash->str;
+	pattern->ptr.str = trash->area;
 	return !!parse_binary(text, &pattern->ptr.str, &pattern->len, err);
 }
 
@@ -425,8 +424,8 @@ int pat_parse_ip(const char *text, struct pattern *pattern, int mflags, char **e
  *
  * These functions are exported and may be used by any other component.
  *
- * This fucntion just take a sample <smp> and check if this sample match
- * with the pattern <pattern>. This fucntion return just PAT_MATCH or
+ * This function just takes a sample <smp> and checks if this sample matches
+ * with the pattern <pattern>. This function returns only PAT_MATCH or
  * PAT_NOMATCH.
  *
  */
@@ -448,7 +447,7 @@ struct pattern *pat_match_nothing(struct sample *smp, struct pattern_expr *expr,
 }
 
 
-/* NB: For two strings to be identical, it is required that their lengths match */
+/* NB: For two strings to be identical, it is required that their length match */
 struct pattern *pat_match_str(struct sample *smp, struct pattern_expr *expr, int fill)
 {
 	int icase;
@@ -463,12 +462,12 @@ struct pattern *pat_match_str(struct sample *smp, struct pattern_expr *expr, int
 	/* Lookup a string in the expression's pattern tree. */
 	if (!eb_is_empty(&expr->pattern_tree)) {
 		/* we may have to force a trailing zero on the test pattern */
-		prev = smp->data.u.str.str[smp->data.u.str.len];
+		prev = smp->data.u.str.area[smp->data.u.str.data];
 		if (prev)
-			smp->data.u.str.str[smp->data.u.str.len] = '\0';
-		node = ebst_lookup(&expr->pattern_tree, smp->data.u.str.str);
+			smp->data.u.str.area[smp->data.u.str.data] = '\0';
+		node = ebst_lookup(&expr->pattern_tree, smp->data.u.str.area);
 		if (prev)
-			smp->data.u.str.str[smp->data.u.str.len] = prev;
+			smp->data.u.str.area[smp->data.u.str.data] = prev;
 
 		if (node) {
 			if (fill) {
@@ -487,15 +486,10 @@ struct pattern *pat_match_str(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -504,21 +498,19 @@ struct pattern *pat_match_str(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (pattern->len != smp->data.u.str.len)
+		if (pattern->len != smp->data.u.str.data)
 			continue;
 
 		icase = expr->mflags & PAT_MF_IGNORE_CASE;
-		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.str, smp->data.u.str.len) == 0) ||
-		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.str, smp->data.u.str.len) == 0)) {
+		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.area, smp->data.u.str.data) == 0) ||
+		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.area, smp->data.u.str.data) == 0)) {
 			ret = pattern;
 			break;
 		}
 	}
 
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -534,15 +526,10 @@ struct pattern *pat_match_bin(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -550,19 +537,17 @@ struct pattern *pat_match_bin(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (pattern->len != smp->data.u.str.len)
+		if (pattern->len != smp->data.u.str.data)
 			continue;
 
-		if (memcmp(pattern->ptr.str, smp->data.u.str.str, smp->data.u.str.len) == 0) {
+		if (memcmp(pattern->ptr.str, smp->data.u.str.area, smp->data.u.str.data) == 0) {
 			ret = pattern;
 			break;
 		}
 	}
 
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -580,7 +565,7 @@ struct pattern *pat_match_regm(struct sample *smp, struct pattern_expr *expr, in
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (regex_exec_match2(pattern->ptr.reg, smp->data.u.str.str, smp->data.u.str.len,
+		if (regex_exec_match2(pattern->ptr.reg, smp->data.u.str.area, smp->data.u.str.data,
 		                      MAX_MATCH, pmatch, 0)) {
 			ret = pattern;
 			smp->ctx.a[0] = pmatch;
@@ -604,15 +589,10 @@ struct pattern *pat_match_reg(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -620,16 +600,14 @@ struct pattern *pat_match_reg(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (regex_exec2(pattern->ptr.reg, smp->data.u.str.str, smp->data.u.str.len)) {
+		if (regex_exec2(pattern->ptr.reg, smp->data.u.str.area, smp->data.u.str.data)) {
 			ret = pattern;
 			break;
 		}
 	}
 
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -649,12 +627,13 @@ struct pattern *pat_match_beg(struct sample *smp, struct pattern_expr *expr, int
 	/* Lookup a string in the expression's pattern tree. */
 	if (!eb_is_empty(&expr->pattern_tree)) {
 		/* we may have to force a trailing zero on the test pattern */
-		prev = smp->data.u.str.str[smp->data.u.str.len];
+		prev = smp->data.u.str.area[smp->data.u.str.data];
 		if (prev)
-			smp->data.u.str.str[smp->data.u.str.len] = '\0';
-		node = ebmb_lookup_longest(&expr->pattern_tree, smp->data.u.str.str);
+			smp->data.u.str.area[smp->data.u.str.data] = '\0';
+		node = ebmb_lookup_longest(&expr->pattern_tree,
+					   smp->data.u.str.area);
 		if (prev)
-			smp->data.u.str.str[smp->data.u.str.len] = prev;
+			smp->data.u.str.area[smp->data.u.str.data] = prev;
 
 		if (node) {
 			if (fill) {
@@ -673,15 +652,10 @@ struct pattern *pat_match_beg(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -689,22 +663,20 @@ struct pattern *pat_match_beg(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (pattern->len > smp->data.u.str.len)
+		if (pattern->len > smp->data.u.str.data)
 			continue;
 
 		icase = expr->mflags & PAT_MF_IGNORE_CASE;
-		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.str, pattern->len) != 0) ||
-		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.str, pattern->len) != 0))
+		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.area, pattern->len) != 0) ||
+		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.area, pattern->len) != 0))
 			continue;
 
 		ret = pattern;
 		break;
 	}
 
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -721,15 +693,10 @@ struct pattern *pat_match_end(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -737,22 +704,20 @@ struct pattern *pat_match_end(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (pattern->len > smp->data.u.str.len)
+		if (pattern->len > smp->data.u.str.data)
 			continue;
 
 		icase = expr->mflags & PAT_MF_IGNORE_CASE;
-		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.str + smp->data.u.str.len - pattern->len, pattern->len) != 0) ||
-		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.str + smp->data.u.str.len - pattern->len, pattern->len) != 0))
+		if ((icase && strncasecmp(pattern->ptr.str, smp->data.u.str.area + smp->data.u.str.data - pattern->len, pattern->len) != 0) ||
+		    (!icase && strncmp(pattern->ptr.str, smp->data.u.str.area + smp->data.u.str.data - pattern->len, pattern->len) != 0))
 			continue;
 
 		ret = pattern;
 		break;
 	}
 
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -773,15 +738,10 @@ struct pattern *pat_match_sub(struct sample *smp, struct pattern_expr *expr, int
 	if (pat_lru_tree) {
 		unsigned long long seed = pat_lru_seed ^ (long)expr;
 
-		HA_SPIN_LOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		lru = lru64_get(XXH64(smp->data.u.str.str, smp->data.u.str.len, seed),
+		lru = lru64_get(XXH64(smp->data.u.str.area, smp->data.u.str.data, seed),
 				pat_lru_tree, expr, expr->revision);
-		if (!lru) {
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-		}
-		else if (lru->domain) {
+		if (lru && lru->domain) {
 			ret = lru->data;
-			HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
 			return ret;
 		}
 	}
@@ -789,13 +749,13 @@ struct pattern *pat_match_sub(struct sample *smp, struct pattern_expr *expr, int
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
 
-		if (pattern->len > smp->data.u.str.len)
+		if (pattern->len > smp->data.u.str.data)
 			continue;
 
-		end = smp->data.u.str.str + smp->data.u.str.len - pattern->len;
+		end = smp->data.u.str.area + smp->data.u.str.data - pattern->len;
 		icase = expr->mflags & PAT_MF_IGNORE_CASE;
 		if (icase) {
-			for (c = smp->data.u.str.str; c <= end; c++) {
+			for (c = smp->data.u.str.area; c <= end; c++) {
 				if (tolower(*c) != tolower(*pattern->ptr.str))
 					continue;
 				if (strncasecmp(pattern->ptr.str, c, pattern->len) == 0) {
@@ -804,7 +764,7 @@ struct pattern *pat_match_sub(struct sample *smp, struct pattern_expr *expr, int
 				}
 			}
 		} else {
-			for (c = smp->data.u.str.str; c <= end; c++) {
+			for (c = smp->data.u.str.area; c <= end; c++) {
 				if (*c != *pattern->ptr.str)
 					continue;
 				if (strncmp(pattern->ptr.str, c, pattern->len) == 0) {
@@ -815,10 +775,8 @@ struct pattern *pat_match_sub(struct sample *smp, struct pattern_expr *expr, int
 		}
 	}
  leave:
-	if (lru) {
+	if (lru)
 		lru64_commit(lru, ret, expr, expr->revision, NULL);
-		HA_SPIN_UNLOCK(PATLRU_LOCK, &pat_lru_tree_lock);
-	}
 
 	return ret;
 }
@@ -847,13 +805,13 @@ static int match_word(struct sample *smp, struct pattern *pattern, int mflags, u
 	while (pl > 0 && is_delimiter(ps[pl - 1], delimiters))
 		pl--;
 
-	if (pl > smp->data.u.str.len)
+	if (pl > smp->data.u.str.data)
 		return PAT_NOMATCH;
 
 	may_match = 1;
 	icase = mflags & PAT_MF_IGNORE_CASE;
-	end = smp->data.u.str.str + smp->data.u.str.len - pl;
-	for (c = smp->data.u.str.str; c <= end; c++) {
+	end = smp->data.u.str.area + smp->data.u.str.data - pl;
+	for (c = smp->data.u.str.area; c <= end; c++) {
 		if (is_delimiter(*c, delimiters)) {
 			may_match = 1;
 			continue;
@@ -935,8 +893,8 @@ struct pattern *pat_match_len(struct sample *smp, struct pattern_expr *expr, int
 
 	list_for_each_entry(lst, &expr->patterns, list) {
 		pattern = &lst->pat;
-		if ((!pattern->val.range.min_set || pattern->val.range.min <= smp->data.u.str.len) &&
-		    (!pattern->val.range.max_set || smp->data.u.str.len <= pattern->val.range.max))
+		if ((!pattern->val.range.min_set || pattern->val.range.min <= smp->data.u.str.data) &&
+		    (!pattern->val.range.max_set || smp->data.u.str.data <= pattern->val.range.max))
 			return pattern;
 	}
 	return NULL;
@@ -966,7 +924,7 @@ struct pattern *pat_match_ip(struct sample *smp, struct pattern_expr *expr, int 
 				static_pattern.ref = elt->ref;
 				static_pattern.sflags = PAT_SF_TREE;
 				static_pattern.type = SMP_T_IPV4;
-				memcpy(&static_pattern.val.ipv4.addr.s_addr, elt->node.key, 4);
+				static_pattern.val.ipv4.addr = *(struct in_addr *)elt->node.key;
 				if (!cidr2dotted(elt->node.node.pfx, &static_pattern.val.ipv4.mask))
 					return NULL;
 			}
@@ -988,7 +946,7 @@ struct pattern *pat_match_ip(struct sample *smp, struct pattern_expr *expr, int 
 				static_pattern.ref = elt->ref;
 				static_pattern.sflags = PAT_SF_TREE;
 				static_pattern.type = SMP_T_IPV6;
-				memcpy(&static_pattern.val.ipv6.addr, elt->node.key, 16);
+				static_pattern.val.ipv6.addr = *(struct in6_addr *)elt->node.key;
 				static_pattern.val.ipv6.mask = elt->node.node.pfx;
 			}
 			return &static_pattern;
@@ -1008,7 +966,7 @@ struct pattern *pat_match_ip(struct sample *smp, struct pattern_expr *expr, int 
 				static_pattern.ref = elt->ref;
 				static_pattern.sflags = PAT_SF_TREE;
 				static_pattern.type = SMP_T_IPV6;
-				memcpy(&static_pattern.val.ipv6.addr, elt->node.key, 16);
+				static_pattern.val.ipv6.addr = *(struct in6_addr *)elt->node.key;
 				static_pattern.val.ipv6.mask = elt->node.node.pfx;
 			}
 			return &static_pattern;
@@ -1042,7 +1000,7 @@ struct pattern *pat_match_ip(struct sample *smp, struct pattern_expr *expr, int 
 					static_pattern.ref = elt->ref;
 					static_pattern.sflags = PAT_SF_TREE;
 					static_pattern.type = SMP_T_IPV4;
-					memcpy(&static_pattern.val.ipv4.addr.s_addr, elt->node.key, 4);
+					static_pattern.val.ipv4.addr = *(struct in_addr *)elt->node.key;
 					if (!cidr2dotted(elt->node.node.pfx, &static_pattern.val.ipv4.mask))
 						return NULL;
 				}
@@ -1251,18 +1209,9 @@ int pat_idx_list_reg_cap(struct pattern_expr *expr, struct pattern *pat, int cap
 	/* duplicate pattern */
 	memcpy(&patl->pat, pat, sizeof(*pat));
 
-	/* allocate regex */
-	patl->pat.ptr.reg = calloc(1, sizeof(*patl->pat.ptr.reg));
-	if (!patl->pat.ptr.reg) {
-		free(patl);
-		memprintf(err, "out of memory while indexing pattern");
-		return 0;
-	}
-
 	/* compile regex */
-	if (!regex_comp(pat->ptr.str, patl->pat.ptr.reg,
-	                !(expr->mflags & PAT_MF_IGNORE_CASE), cap, err)) {
-		free(patl->pat.ptr.reg);
+	if (!(patl->pat.ptr.reg = regex_comp(pat->ptr.str, !(expr->mflags & PAT_MF_IGNORE_CASE),
+	                                     cap, err))) {
 		free(patl);
 		return 0;
 	}
@@ -1651,7 +1600,7 @@ int pat_ref_delete_by_id(struct pat_ref *ref, struct pat_ref_elt *refelt)
 				LIST_DEL(&bref->users);
 				LIST_INIT(&bref->users);
 				if (elt->list.n != &ref->head)
-					LIST_ADDQ(&LIST_ELEM(elt->list.n, struct stream *, list)->back_refs, &bref->users);
+					LIST_ADDQ(&LIST_ELEM(elt->list.n, typeof(elt), list)->back_refs, &bref->users);
 				bref->ref = elt->list.n;
 			}
 			list_for_each_entry(expr, &ref->pat, list)
@@ -1670,7 +1619,7 @@ int pat_ref_delete_by_id(struct pat_ref *ref, struct pat_ref_elt *refelt)
 }
 
 /* This function remove all pattern match <key> from the the reference
- * and from each expr member of the reference. This fucntion returns 1
+ * and from each expr member of the reference. This function returns 1
  * if the deletion is done and return 0 is the entry is not found.
  */
 int pat_ref_delete(struct pat_ref *ref, const char *key)
@@ -1691,7 +1640,7 @@ int pat_ref_delete(struct pat_ref *ref, const char *key)
 				LIST_DEL(&bref->users);
 				LIST_INIT(&bref->users);
 				if (elt->list.n != &ref->head)
-					LIST_ADDQ(&LIST_ELEM(elt->list.n, struct stream *, list)->back_refs, &bref->users);
+					LIST_ADDQ(&LIST_ELEM(elt->list.n, typeof(elt), list)->back_refs, &bref->users);
 				bref->ref = elt->list.n;
 			}
 			list_for_each_entry(expr, &ref->pat, list)
@@ -1836,10 +1785,10 @@ int pat_ref_set(struct pat_ref *ref, const char *key, const char *value, char **
 	return 1;
 }
 
-/* This function create new reference. <ref> is the reference name.
+/* This function creates a new reference. <ref> is the reference name.
  * <flags> are PAT_REF_*. /!\ The reference is not checked, and must
  * be unique. The user must check the reference with "pat_ref_lookup()"
- * before calling this function. If the fucntion fail, it return NULL,
+ * before calling this function. If the function fail, it return NULL,
  * else return new struct pat_ref.
  */
 struct pat_ref *pat_ref_new(const char *reference, const char *display, unsigned int flags)
@@ -2057,19 +2006,17 @@ int pat_ref_add(struct pat_ref *ref,
 	return 1;
 }
 
-/* This function prune <ref>, replace all reference by the references
- * of <replace>, and reindex all the news values.
+/* This function prunes <ref>, replaces all references by the references
+ * of <replace>, and reindexes all the news values.
  *
- * The pattern are loaded in best effort and the errors are ignored,
- * but writed in the logs.
+ * The patterns are loaded in best effort and the errors are ignored,
+ * but written in the logs.
  */
 void pat_ref_reload(struct pat_ref *ref, struct pat_ref *replace)
 {
 	struct pattern_expr *expr;
-	char *err = NULL;
 	struct pat_ref_elt *elt, *safe;
 	struct bref *bref, *back;
-	struct sample_data *data;
 	struct pattern pattern;
 
 
@@ -2088,7 +2035,7 @@ void pat_ref_reload(struct pat_ref *ref, struct pat_ref *replace)
 			LIST_DEL(&bref->users);
 			LIST_INIT(&bref->users);
 			if (elt->list.n != &ref->head)
-				LIST_ADDQ(&LIST_ELEM(elt->list.n, struct stream *, list)->back_refs, &bref->users);
+				LIST_ADDQ(&LIST_ELEM(elt->list.n, typeof(elt), list)->back_refs, &bref->users);
 			bref->ref = elt->list.n;
 		}
 		LIST_DEL(&elt->list);
@@ -2104,6 +2051,9 @@ void pat_ref_reload(struct pat_ref *ref, struct pat_ref *replace)
 	list_for_each_entry(expr, &ref->pat, list) {
 		expr->pat_head->prune(expr);
 		list_for_each_entry(elt, &ref->head, list) {
+			char *err = NULL;
+			struct sample_data *data = NULL;
+
 			/* Create sample */
 			if (elt->sample && expr->pat_head->parse_smp) {
 				/* New sample. */
@@ -2121,8 +2071,6 @@ void pat_ref_reload(struct pat_ref *ref, struct pat_ref *replace)
 				}
 
 			}
-			else
-				data = NULL;
 
 			/* initialise pattern */
 			memset(&pattern, 0, sizeof(pattern));
@@ -2176,7 +2124,7 @@ void pat_ref_prune(struct pat_ref *ref)
 			LIST_DEL(&bref->users);
 			LIST_INIT(&bref->users);
 			if (elt->list.n != &ref->head)
-				LIST_ADDQ(&LIST_ELEM(elt->list.n, struct stream *, list)->back_refs, &bref->users);
+				LIST_ADDQ(&LIST_ELEM(elt->list.n, typeof(elt), list)->back_refs, &bref->users);
 			bref->ref = elt->list.n;
 		}
 		LIST_DEL(&elt->list);
@@ -2199,12 +2147,12 @@ struct pattern_expr *pattern_lookup_expr(struct pattern_head *head, struct pat_r
 	return NULL;
 }
 
-/* This function create new pattern_expr associated to the reference <ref>.
- * <ref> can be NULL. If an error is occured, the function returns NULL and
+/* This function creates new pattern_expr associated to the reference <ref>.
+ * <ref> can be NULL. If an error occurs, the function returns NULL and
  * <err> is filled. Otherwise, the function returns new pattern_expr linked
  * with <head> and <ref>.
  *
- * The returned value can be a alredy filled pattern list, in this case the
+ * The returned value can be an already filled pattern list, in this case the
  * flag <reuse> is set.
  */
 struct pattern_expr *pattern_new_expr(struct pattern_head *head, struct pat_ref *ref,
@@ -2225,7 +2173,7 @@ struct pattern_expr *pattern_new_expr(struct pattern_head *head, struct pat_ref 
 
 	/* Look for existing similar expr. No that only the index, parse and
 	 * parse_smp function must be identical for having similar pattern.
-	 * The other function depends of theses first.
+	 * The other function depends of these first.
 	 */
 	if (ref) {
 		list_for_each_entry(expr, &ref->pat, list)
@@ -2332,9 +2280,9 @@ int pat_ref_read_from_file_smp(struct pat_ref *ref, const char *filename, char *
 	 * followed by one value per line. The start spaces, separator spaces
 	 * and and spaces are stripped. Each can contain comment started by '#'
 	 */
-	while (fgets(trash.str, trash.size, file) != NULL) {
+	while (fgets(trash.area, trash.size, file) != NULL) {
 		line++;
-		c = trash.str;
+		c = trash.area;
 
 		/* ignore lines beginning with a dash */
 		if (*c == '#')
@@ -2409,9 +2357,9 @@ int pat_ref_read_from_file(struct pat_ref *ref, const char *filename, char **err
 	 * line. If the line contains spaces, they will be part of the pattern.
 	 * The pattern stops at the first CR, LF or EOF encountered.
 	 */
-	while (fgets(trash.str, trash.size, file) != NULL) {
+	while (fgets(trash.area, trash.size, file) != NULL) {
 		line++;
-		c = trash.str;
+		c = trash.area;
 
 		/* ignore lines beginning with a dash */
 		if (*c == '#')
@@ -2462,7 +2410,7 @@ int pattern_read_from_file(struct pattern_head *head, unsigned int refflags,
 		             "pattern loaded from file '%s' used by %s at file '%s' line %d",
 		             filename, refflags & PAT_REF_MAP ? "map" : "acl", file, line);
 
-		ref = pat_ref_new(filename, trash.str, refflags);
+		ref = pat_ref_new(filename, trash.area, refflags);
 		if (!ref) {
 			memprintf(err, "out of memory");
 			return 0;
@@ -2509,7 +2457,7 @@ int pattern_read_from_file(struct pattern_head *head, unsigned int refflags,
 		chunk_appendf(&trash, ", by %s at file '%s' line %d",
 		              refflags & PAT_REF_MAP ? "map" : "acl", file, line);
 		free(ref->display);
-		ref->display = strdup(trash.str);
+		ref->display = strdup(trash.area);
 		if (!ref->display) {
 			memprintf(err, "out of memory");
 			return 0;
@@ -2596,11 +2544,13 @@ struct pattern *pattern_exec_match(struct pattern_head *head, struct sample *smp
 					case SMP_T_STR:
 						static_sample_data.type = SMP_T_STR;
 						static_sample_data.u.str = *get_trash_chunk();
-						static_sample_data.u.str.len = pat->data->u.str.len;
-						if (static_sample_data.u.str.len >= static_sample_data.u.str.size)
-							static_sample_data.u.str.len = static_sample_data.u.str.size - 1;
-						memcpy(static_sample_data.u.str.str, pat->data->u.str.str, static_sample_data.u.str.len);
-						static_sample_data.u.str.str[static_sample_data.u.str.len] = 0;
+						static_sample_data.u.str.data = pat->data->u.str.data;
+						if (static_sample_data.u.str.data >= static_sample_data.u.str.size)
+							static_sample_data.u.str.data = static_sample_data.u.str.size - 1;
+						memcpy(static_sample_data.u.str.area,
+						       pat->data->u.str.area,
+						       static_sample_data.u.str.data);
+						static_sample_data.u.str.area[static_sample_data.u.str.data] = 0;
 					case SMP_T_IPV4:
 					case SMP_T_IPV6:
 					case SMP_T_SINT:
@@ -2692,10 +2642,6 @@ void pattern_finalize_config(void)
 	struct list pr = LIST_HEAD_INIT(pr);
 
 	pat_lru_seed = random();
-	if (global.tune.pattern_cache) {
-		pat_lru_tree = lru64_new(global.tune.pattern_cache);
-		HA_SPIN_INIT(&pat_lru_tree_lock);
-	}
 
 	list_for_each_entry(ref, &pattern_reference, list) {
 		if (ref->unique_id == -1) {
@@ -2734,3 +2680,19 @@ void pattern_finalize_config(void)
 	LIST_ADD(&pr, &pattern_reference);
 	LIST_DEL(&pr);
 }
+
+static int pattern_per_thread_lru_alloc()
+{
+	if (!global.tune.pattern_cache)
+		return 1;
+	pat_lru_tree = lru64_new(global.tune.pattern_cache);
+	return !!pat_lru_tree;
+}
+
+static void pattern_per_thread_lru_free()
+{
+	lru64_destroy(pat_lru_tree);
+}
+
+REGISTER_PER_THREAD_ALLOC(pattern_per_thread_lru_alloc);
+REGISTER_PER_THREAD_FREE(pattern_per_thread_lru_free);

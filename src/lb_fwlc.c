@@ -25,40 +25,54 @@
 /* Remove a server from a tree. It must have previously been dequeued. This
  * function is meant to be called when a server is going down or has its
  * weight disabled.
+ *
+ * The server's lock and the lbprm's lock must be held.
  */
 static inline void fwlc_remove_from_tree(struct server *s)
 {
 	s->lb_tree = NULL;
 }
 
-/* simply removes a server from a tree */
+/* simply removes a server from a tree.
+ *
+ * The server's lock and the lbprm's lock must be held.
+ */
 static inline void fwlc_dequeue_srv(struct server *s)
 {
 	eb32_delete(&s->lb_node);
 }
 
 /* Queue a server in its associated tree, assuming the weight is >0.
- * Servers are sorted by #conns/weight. To ensure maximum accuracy,
- * we use #conns*SRV_EWGHT_MAX/eweight as the sorting key.
+ * Servers are sorted by (#conns+1)/weight. To ensure maximum accuracy,
+ * we use (#conns+1)*SRV_EWGHT_MAX/eweight as the sorting key. The reason
+ * for using #conns+1 is to sort by weights in case the server is picked
+ * and not before it is picked. This provides a better load accuracy for
+ * low connection counts when weights differ and makes sure the round-robin
+ * applies between servers of highest weight first. However servers with no
+ * connection are always picked first so that under low loads, it's not
+ * always the single server with the highest weight that gets picked.
+ *
+ * The server's lock and the lbprm's lock must be held.
  */
 static inline void fwlc_queue_srv(struct server *s)
 {
-	s->lb_node.key = s->served * SRV_EWGHT_MAX / s->next_eweight;
+	s->lb_node.key = s->served ? (s->served + 1) * SRV_EWGHT_MAX / s->next_eweight : 0;
 	eb32_insert(s->lb_tree, &s->lb_node);
 }
 
 /* Re-position the server in the FWLC tree after it has been assigned one
  * connection or after it has released one. Note that it is possible that
  * the server has been moved out of the tree due to failed health-checks.
+ *
+ * The server's lock must be held. The lbprm's lock will be used.
  */
 static void fwlc_srv_reposition(struct server *s)
 {
-	if (!s->lb_tree)
-		return;
-
 	HA_SPIN_LOCK(LBPRM_LOCK, &s->proxy->lbprm.lock);
-	fwlc_dequeue_srv(s);
-	fwlc_queue_srv(s);
+	if (s->lb_tree) {
+		fwlc_dequeue_srv(s);
+		fwlc_queue_srv(s);
+	}
 	HA_SPIN_UNLOCK(LBPRM_LOCK, &s->proxy->lbprm.lock);
 }
 
@@ -67,6 +81,8 @@ static void fwlc_srv_reposition(struct server *s)
  * It is not important whether the server was already down or not. It is not
  * important either that the new state is completely down (the caller may not
  * know all the variables of a server's state).
+ *
+ * The server's lock must be held. The lbprm's lock will be used.
  */
 static void fwlc_set_server_status_down(struct server *srv)
 {
@@ -77,6 +93,8 @@ static void fwlc_set_server_status_down(struct server *srv)
 
 	if (srv_willbe_usable(srv))
 		goto out_update_state;
+	HA_SPIN_LOCK(LBPRM_LOCK, &p->lbprm.lock);
+
 
 	if (!srv_currently_usable(srv))
 		/* server was already down */
@@ -109,6 +127,8 @@ static void fwlc_set_server_status_down(struct server *srv)
 out_update_backend:
 	/* check/update tot_used, tot_weight */
 	update_backend_weight(p);
+	HA_SPIN_UNLOCK(LBPRM_LOCK, &p->lbprm.lock);
+
  out_update_state:
 	srv_lb_commit_status(srv);
 }
@@ -119,6 +139,8 @@ out_update_backend:
  * important either that the new state is completely UP (the caller may not
  * know all the variables of a server's state). This function will not change
  * the weight of a server which was already up.
+ *
+ * The server's lock must be held. The lbprm's lock will be used.
  */
 static void fwlc_set_server_status_up(struct server *srv)
 {
@@ -129,6 +151,8 @@ static void fwlc_set_server_status_up(struct server *srv)
 
 	if (!srv_willbe_usable(srv))
 		goto out_update_state;
+
+	HA_SPIN_LOCK(LBPRM_LOCK, &p->lbprm.lock);
 
 	if (srv_currently_usable(srv))
 		/* server was already up */
@@ -167,12 +191,16 @@ static void fwlc_set_server_status_up(struct server *srv)
  out_update_backend:
 	/* check/update tot_used, tot_weight */
 	update_backend_weight(p);
+	HA_SPIN_UNLOCK(LBPRM_LOCK, &p->lbprm.lock);
+
  out_update_state:
 	srv_lb_commit_status(srv);
 }
 
 /* This function must be called after an update to server <srv>'s effective
  * weight. It may be called after a state change too.
+ *
+ * The server's lock must be held. The lbprm's lock will be used.
  */
 static void fwlc_update_server_weight(struct server *srv)
 {
@@ -206,6 +234,8 @@ static void fwlc_update_server_weight(struct server *srv)
 		return;
 	}
 
+	HA_SPIN_LOCK(LBPRM_LOCK, &p->lbprm.lock);
+
 	if (srv->lb_tree)
 		fwlc_dequeue_srv(srv);
 
@@ -220,6 +250,8 @@ static void fwlc_update_server_weight(struct server *srv)
 	fwlc_queue_srv(srv);
 
 	update_backend_weight(p);
+	HA_SPIN_UNLOCK(LBPRM_LOCK, &p->lbprm.lock);
+
 	srv_lb_commit_status(srv);
 }
 
@@ -261,6 +293,8 @@ void fwlc_init_server_tree(struct proxy *p)
 
 /* Return next server from the FWLC tree in backend <p>. If the tree is empty,
  * return NULL. Saturated servers are skipped.
+ *
+ * The server's lock must be held. The lbprm's lock will be used.
  */
 struct server *fwlc_get_next_server(struct proxy *p, struct server *srvtoavoid)
 {

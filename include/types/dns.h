@@ -34,6 +34,8 @@
 #include <types/server.h>
 #include <types/task.h>
 
+extern struct pool_head *dns_requester_pool;
+
 /*DNS maximum values */
 /*
  * Maximum issued from RFC:
@@ -88,7 +90,7 @@
 #define DNS_FLAG_TRUNCATED      0x0200  /* mask for truncated flag */
 #define DNS_FLAG_REPLYCODE      0x000F  /* mask for reply code */
 
-/* max number of network preference entries are avalaible from the
+/* max number of network preference entries are available from the
  * configuration file.
  */
 #define SRV_MAX_PREF_NET 5
@@ -115,9 +117,9 @@ struct dns_question {
 
 /* NOTE: big endian structure */
 struct dns_query_item {
-	char           name[DNS_MAX_NAME_SIZE]; /* query name */
-	unsigned short type;                    /* question type */
-	unsigned short class;                   /* query class */
+	char           name[DNS_MAX_NAME_SIZE+1]; /* query name */
+	unsigned short type;                      /* question type */
+	unsigned short class;                     /* query class */
 	struct list    list;
 };
 
@@ -138,17 +140,17 @@ struct dns_additional_record {
 /* NOTE: big endian structure */
 struct dns_answer_item {
 	/*For SRV type, name also includes service and protocol value */
-	char            name[DNS_MAX_NAME_SIZE];   /* answer name */
-	int16_t         type;                      /* question type */
-	int16_t         class;                     /* query class */
-	int32_t         ttl;                       /* response TTL */
-	int16_t         priority;                  /* SRV type priority */
-	uint16_t        weight;                    /* SRV type weight */
-	int16_t         port;                      /* SRV type port */
-	int16_t         data_len;                  /* number of bytes in target below */
-	struct sockaddr address;                   /* IPv4 or IPv6, network format */
-	char            target[DNS_MAX_NAME_SIZE]; /* Response data: SRV or CNAME type target */
-	time_t          last_seen;                 /* When was the answer was last seen */
+	char            name[DNS_MAX_NAME_SIZE+1];   /* answer name */
+	int16_t         type;                        /* question type */
+	int16_t         class;                       /* query class */
+	int32_t         ttl;                         /* response TTL */
+	int16_t         priority;                    /* SRV type priority */
+	uint16_t        weight;                      /* SRV type weight */
+	uint16_t        port;                        /* SRV type port */
+	uint16_t        data_len;                    /* number of bytes in target below */
+	struct sockaddr address;                     /* IPv4 or IPv6, network format */
+	char            target[DNS_MAX_NAME_SIZE+1]; /* Response data: SRV or CNAME type target */
+	time_t          last_seen;                   /* When was the answer was last seen */
 	struct list     list;
 };
 
@@ -244,7 +246,9 @@ struct dns_options {
 			struct in6_addr in6;
 		} mask;
 	} pref_net[SRV_MAX_PREF_NET];
-	int pref_net_nb; /* The number of registered prefered networks. */
+	int pref_net_nb; /* The number of registered preferred networks. */
+	int accept_duplicate_ip; /* flag to indicate whether the associated object can use an IP address
+				    already set to an other object of the same group */
 };
 
 /* Resolution structure associated to single server and used to manage name
@@ -263,7 +267,7 @@ struct dns_resolution {
 	unsigned int          last_valid;          /* time of the last valid response */
 	int                   query_id;            /* DNS query ID dedicated for this resolution */
 	struct eb32_node      qid;                 /* ebtree query id */
-	int                   prefered_query_type; /* prefered query type */
+	int                   prefered_query_type; /* preferred query type */
 	int                   query_type;          /* current query type  */
 	int                   status;              /* status of the resolution being processed RSLV_STATUS_* */
 	int                   step;                /* RSLV_STEP_* */
@@ -290,7 +294,7 @@ struct dns_requester {
 
 /* Last resolution status code */
 enum {
-	RSLV_STATUS_NONE = 0,  /* no resolution occured yet */
+	RSLV_STATUS_NONE = 0,  /* no resolution occurred yet */
 	RSLV_STATUS_VALID,     /* no error */
 	RSLV_STATUS_INVALID,   /* invalid responses */
 	RSLV_STATUS_ERROR,     /* error */

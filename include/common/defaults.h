@@ -22,6 +22,14 @@
 #ifndef _COMMON_DEFAULTS_H
 #define _COMMON_DEFAULTS_H
 
+/* MAX_PROCS defines the highest limit for the global "nbproc" value. It
+ * defaults to the number of bits in a long integer but may be lowered to save
+ * resources on embedded systems.
+ */
+#ifndef MAX_PROCS
+#define MAX_PROCS LONGBITS
+#endif
+
 /*
  * BUFSIZE defines the size of a read and write buffer. It is the maximum
  * amount of bytes which can be stored by the proxy for each stream. However,
@@ -135,6 +143,11 @@
 #define MAX_POLL_EVENTS 200
 #endif
 
+// the max number of tasks to run at once
+#ifndef RUNQUEUE_DEPTH
+#define RUNQUEUE_DEPTH 200
+#endif
+
 // cookie delimitor in "prefix" mode. This character is inserted between the
 // persistence cookie and the original value. The '~' is allowed by RFC6265,
 // and should not be too common in server names.
@@ -179,15 +192,15 @@
  * absolute limit accepted by the system. If the configuration specifies a
  * higher value, it will be capped to SYSTEM_MAXCONN and a warning will be
  * emitted. The only way to override this limit will be to set it via the
- * command-line '-n' argument.
+ * command-line '-n' argument. If SYSTEM_MAXCONN is not set, a minimum value
+ * of 100 will be used for DEFAULT_MAXCONN which almost guarantees that a
+ * process will correctly start in any situation.
  */
-#ifndef SYSTEM_MAXCONN
-#ifndef DEFAULT_MAXCONN
-#define DEFAULT_MAXCONN 2000
-#endif
-#else
+#ifdef SYSTEM_MAXCONN
 #undef  DEFAULT_MAXCONN
 #define DEFAULT_MAXCONN SYSTEM_MAXCONN
+#elif !defined(DEFAULT_MAXCONN)
+#define DEFAULT_MAXCONN 100
 #endif
 
 /* Minimum check interval for spread health checks. Servers with intervals
@@ -234,9 +247,19 @@
 #define CONNECT_DEFAULT_CIPHERS NULL
 #endif
 
+/* ciphers used as defaults on TLS 1.3 connect */
+#ifndef CONNECT_DEFAULT_CIPHERSUITES
+#define CONNECT_DEFAULT_CIPHERSUITES NULL
+#endif
+
 /* ciphers used as defaults on listeners */
 #ifndef LISTEN_DEFAULT_CIPHERS
 #define LISTEN_DEFAULT_CIPHERS NULL
+#endif
+
+/* cipher suites used as defaults on TLS 1.3 listeners */
+#ifndef LISTEN_DEFAULT_CIPHERSUITES
+#define LISTEN_DEFAULT_CIPHERSUITES NULL
 #endif
 
 /* named curve used as defaults for ECDHE ciphers */

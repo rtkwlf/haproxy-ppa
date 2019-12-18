@@ -24,7 +24,7 @@ Files: src/hlua.c, include/*/hlua.h
 
 Maps and pattern matching
 Maintainer: Thierry Fournier <tfournier@arpalert.org>
-Files: src/maps.c, src/pattern.c, include/*/maps.h, include/*/pattern.h
+Files: src/map.c, src/pattern.c, include/*/map.h, include/*/pattern.h
 
 DNS
 Maintainer: Baptiste Assmann <bedis9@gmail.com>
@@ -82,3 +82,7 @@ Note: every change around the locking or synchronization point will require
       approval from one of these maintainers. Problems which only appear when
       nbthread is greater than 1 and which disappear otherwise are also
       relevant.
+
+ScientiaMobile WURFL Device Detection
+Maintainer: Paul Borile, Massimiliano Bellomi <wurfl-haproxy-support@scientiamobile.com>
+Files: src/wurfl.c
